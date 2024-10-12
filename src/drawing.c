@@ -17,18 +17,11 @@ extern inline u32 tfb_screen_height(void);
 extern inline u32 tfb_win_width(void);
 extern inline u32 tfb_win_height(void);
 
-void *__fb_buffer;
-void *__fb_real_buffer;
+u8 *__fb_buffer;
+u8 *__fb_real_buffer;
 size_t __fb_size;
 size_t __fb_pitch;
-size_t __fb_pitch_div4; /*
-                         * Used in tfb_draw_pixel* to save a (x << 2) operation.
-                         * If we had to use __fb_pitch, we'd had to write:
-                         *    *(u32 *)(__fb_buffer + (x << 2) + y * __fb_pitch)
-                         * which clearly requires an additional shift operation
-                         * that we can skip by using __fb_pitch_div4 + an early
-                         * cast to u32.
-                         */
+int __fb_bpp;
 
 int __fb_screen_w;
 int __fb_screen_h;
@@ -58,11 +51,6 @@ int tfb_set_center_window_size(u32 w, u32 h)
 
 void tfb_clear_screen(u32 color)
 {
-   if (__fb_pitch == (u32) 4 * __fb_screen_w) {
-      memset32(__fb_buffer, color, __fb_size >> 2);
-      return;
-   }
-
    for (int y = 0; y < __fb_screen_h; y++)
       tfb_draw_hline(0, y, __fb_screen_w, color);
 }
@@ -86,7 +74,14 @@ void tfb_draw_hline(int x, int y, int len, u32 color)
       return;
 
    len = MIN(len, MAX(0, (int)__fb_win_end_x - x));
-   memset32(__fb_buffer + y * __fb_pitch + (x << 2), color, len);
+   for (int i = 0; i < len; i++)
+   {
+      volatile u8* buf = __fb_buffer + y * __fb_pitch + (x + i) * __fb_bpp;
+      for (int p = 0; p < __fb_bpp; p++)
+      {
+         *(buf + p) = ((u8*)&color)[p];
+      }
+   }
 }
 
 void tfb_draw_vline(int x, int y, int len, u32 color)
@@ -106,18 +101,20 @@ void tfb_draw_vline(int x, int y, int len, u32 color)
 
    yend = MIN(y + len, __fb_win_end_y);
 
-   volatile u32 *buf =
-      ((volatile u32 *) __fb_buffer) + y * __fb_pitch_div4 + x;
+   volatile u8 *buf = __fb_buffer + y * __fb_pitch + x * __fb_bpp;
 
-   for (; y < yend; y++, buf += __fb_pitch_div4)
-      *buf = color;
+   for (; y < yend; y++, buf += __fb_pitch)
+   {
+      for (int p = 0; p < __fb_bpp; p++)
+      {
+         *(buf + p) = ((u8*)&color)[p];
+      }
+
+   }
 }
 
 void tfb_fill_rect(int x, int y, int w, int h, u32 color)
 {
-   u32 yend;
-   void *dest;
-
    if (w < 0) {
       x += w;
       w = -w;
@@ -127,9 +124,6 @@ void tfb_fill_rect(int x, int y, int w, int h, u32 color)
       y += h;
       h = -h;
    }
-
-   x += __fb_off_x;
-   y += __fb_off_y;
 
    if (x < 0) {
       w += x;
@@ -144,13 +138,10 @@ void tfb_fill_rect(int x, int y, int w, int h, u32 color)
    if (w < 0 || h < 0)
       return;
 
-   w = MIN(w, MAX(0, (int)__fb_win_end_x - x));
-   yend = MIN(y + h, __fb_win_end_y);
-
-   dest = __fb_buffer + y * __fb_pitch + (x << 2);
-
-   for (u32 cy = y; cy < yend; cy++, dest += __fb_pitch)
-      memset32(dest, color, w);
+   for (int dy = 0; dy < h; dy++)
+   {
+      tfb_draw_hline(x, y + dy, w, color);
+   }
 }
 
 void tfb_draw_rect(int x, int y, int w, int h, u32 color)

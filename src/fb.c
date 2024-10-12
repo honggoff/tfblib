@@ -78,9 +78,9 @@ int tfb_acquire_fb(u32 flags, const char *fb_device, const char *tty_device)
 
    __fb_pitch = fb_fixinfo.line_length;
    __fb_size = __fb_pitch * __fbi.yres;
-   __fb_pitch_div4 = __fb_pitch >> 2;
+   __fb_bpp = __fbi.bits_per_pixel / 8;
 
-   if (__fbi.bits_per_pixel != 32) {
+   if (fb_fixinfo.visual != FB_VISUAL_TRUECOLOR) {
       ret = TFB_ERR_UNSUPPORTED_VIDEO_MODE;
       goto out;
    }
@@ -200,13 +200,20 @@ void tfb_flush_rect(int x, int y, int w, int h)
    w = MIN(w, MAX(0, __fb_win_end_x - x));
    yend = MIN(y + h, __fb_win_end_y);
 
-   size_t offset = y * __fb_pitch + (x << 2);
+   size_t offset = y * __fb_pitch + x * __fb_bpp;
    void *dest = __fb_real_buffer + offset;
    void *src = __fb_buffer + offset;
-   u32 rect_pitch = w << 2;
+   u32 rect_pitch = w * __fb_bpp;
 
-   for (int cy = y; cy < yend; cy++, src += __fb_pitch, dest += __fb_pitch)
-      memcpy(dest, src, rect_pitch);
+   if (x == 0 && y == 0 && __fb_pitch == (size_t)(w * __fb_bpp))
+   {
+      memcpy(dest, src, (yend - y) * rect_pitch);
+   }
+   else
+   {
+      for (int cy = y; cy < yend; cy++, src += __fb_pitch, dest += __fb_pitch)
+         memcpy(dest, src, rect_pitch);
+   }
 }
 
 void tfb_flush_window(void)

@@ -21,26 +21,3 @@
 typedef uint8_t u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
-
-
-/*
- * Set 'n' 32-bit elems pointed by 's' to 'val'.
- */
-static inline void *memset32(void *s, u32 val, size_t n)
-{
-
-#if defined(__GNUC__) && (defined(__i386__) || defined(__x86_64__))
-
-   __asm__ volatile ("rep stosl"
-                     : "=D" (s), "=a" (val), "=c" (n)
-                     :  "D" (s), "a" (val), "c" (n)
-                     : "cc", "memory");
-#else
-
-   for (size_t i = 0; i < n; i++)
-      ((volatile u32 *)s)[i] = val;
-
-#endif
-
-   return s;
-}
