@@ -60,8 +60,6 @@ ExternalProject_Add(
 
 set(B2C "${CMAKE_CURRENT_BINARY_DIR}/tools/src/tools-build/binary2c")
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
-
 file (GLOB font_files "${CMAKE_CURRENT_SOURCE_DIR}/fonts/*")
 
 set(font_decls "")
@@ -105,6 +103,8 @@ configure_file(
 
 file(GLOB LIB_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c")
 add_library(tfb ${LIB_SOURCES} ${c_font_files} fonts/fonts_decls.c)
+target_include_directories(tfb PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+
 
 add_subdirectory(examples)
 
